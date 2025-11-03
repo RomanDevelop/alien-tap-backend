@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alien-tap-postgres
+    environment:
+      POSTGRES_USER: alien_user
+      POSTGRES_PASSWORD: alien_password
+      POSTGRES_DB: alien_game
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alien_user -d alien_game"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: alien-tap-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://alien_user:alien_password@postgres:5432/alien_game
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-your_bot_token_here}
+      JWT_SECRET: ${JWT_SECRET:-supersecret}
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./migrations:/app/migrations
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
