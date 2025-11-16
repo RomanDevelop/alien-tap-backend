@@ -7,6 +7,7 @@ pub struct Config {
     pub telegram_bot_token: String,
     pub jwt_secret: String,
     pub port: u16,
+    pub dev_mode: bool,
 }
 
 impl Config {
@@ -21,6 +22,10 @@ impl Config {
                 .unwrap_or_else(|_| "8000".to_string())
                 .parse()
                 .unwrap_or(8000),
+            dev_mode: env::var("DEV_MODE")
+                .unwrap_or_else(|_| "false".to_string())
+                .parse()
+                .unwrap_or(false),
         })
     }
 }

@@ -14,6 +14,8 @@ use axum::{
 use serde_json::json;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
+use tower_http::classify::ServerErrorsFailureClass;
 use tracing_subscriber;
 
 use crate::app_state::AppState;
@@ -58,7 +60,38 @@ async fn main() -> anyhow::Result<()> {
         .nest("/auth", routes::auth::router())
         .nest("/game", routes::game::router())
         .nest("/claim", routes::claim::router())
-        .layer(ServiceBuilder::new().layer(cors))
+        .layer(
+            ServiceBuilder::new()
+                .layer(
+                    TraceLayer::new_for_http()
+                        .make_span_with(|request: &axum::http::Request<_>| {
+                            tracing::info_span!(
+                                "http_request",
+                                method = %request.method(),
+                                uri = %request.uri(),
+                                version = ?request.version(),
+                            )
+                        })
+                        .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
+                            tracing::info!(
+                                "→ {} {}",
+                                request.method(),
+                                request.uri().path()
+                            );
+                        })
+                        .on_response(|response: &axum::http::Response<_>, latency: std::time::Duration, _span: &tracing::Span| {
+                            tracing::info!(
+                                "← {} ({}ms)",
+                                response.status(),
+                                latency.as_millis()
+                            );
+                        })
+                        .on_failure(|error: ServerErrorsFailureClass, _latency: std::time::Duration, _span: &tracing::Span| {
+                            tracing::error!("✗ Request failed: {:?}", error);
+                        }),
+                )
+                .layer(cors)
+        )
         .with_state(app_state);
     
     // Запуск сервера
